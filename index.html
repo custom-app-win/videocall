@@ -1,1276 +1,420 @@
 <!DOCTYPE html>
-<html lang="id" class="dark">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MeetGuard P2P — Video Conference Tanpa Server</title>
-    
-    <!-- Tailwind CSS CDN -->
+    <title>MeetGuard - Video Conference P2P</title>
+    <!-- Tailwind CSS CDN v3 (Lebih stabil untuk mobile webview) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- PeerJS CDN untuk Koneksi WebRTC P2P -->
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PeerJS CDN -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Google Fonts: Inter & JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        meet: {
-                            bg: '#121316',
-                            surface: '#1e1f24',
-                            card: '#282a30',
-                            hover: '#33363f'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-
     <style>
-        body {
-            overscroll-behavior-y: contain;
-            background-color: #121316;
-            color: #f8fafc;
-        }
-        /* Efek cermin untuk kamera depan lokal */
-        .mirror-video {
-            transform: scaleX(-1);
-        }
-        /* Custom scrollbar untuk panel chat */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #3f424e;
-            border-radius: 9999px;
-        }
-        @keyframes pulse-ring {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.05); opacity: 0.4; }
-            100% { transform: scale(0.95); opacity: 0.8; }
-        }
-        .animate-ring {
-            animation: pulse-ring 2s infinite ease-in-out;
-        }
+        .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); }
+        .mirror { transform: scaleX(-1); }
+        body { background-color: #0b0f19; color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200 overflow-x-hidden">
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden">
 
-    <!-- ==================== NOTIFIKASI TOAST ==================== -->
-    <div id="toastContainer" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-11/12 max-w-md pointer-events-none"></div>
-
-    <!-- ==================== 1. HALAMAN LOBBY (PRA-RAPAT) ==================== -->
-    <div id="lobbyScreen" class="flex-1 flex flex-col">
-        <!-- Header Lobby -->
-        <header class="border-b border-zinc-800/80 bg-meet-surface/70 backdrop-blur-md sticky top-0 z-30">
-            <div class="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                        <i data-lucide="video" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <h1 class="font-bold text-base sm:text-lg tracking-tight text-white flex items-center gap-2">
-                            MeetGuard <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20">P2P</span>
-                        </h1>
-                        <p class="text-[11px] text-zinc-400 hidden sm:block">Video Conference 2 Arah Tanpa Server</p>
-                    </div>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <span id="lobbyClock" class="text-xs font-mono text-zinc-400 hidden sm:inline-block">--:--</span>
-                    <button onclick="toggleHelpModal(true)" class="px-3 py-2 rounded-xl bg-meet-card hover:bg-meet-hover text-zinc-200 text-xs sm:text-sm font-medium transition flex items-center gap-1.5 border border-zinc-700/70">
-                        <i data-lucide="help-circle" class="w-4 h-4 text-blue-400"></i>
-                        <span>Panduan</span>
-                    </button>
-                </div>
+    <!-- HEADER / NAVBAR -->
+    <header class="w-full px-6 py-4 flex items-center justify-between glass border-b border-gray-800 z-50">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid fa-video text-lg"></i>
             </div>
-        </header>
-
-        <!-- Konten Utama Lobby -->
-        <main class="flex-1 flex items-center justify-center max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-            <div class="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
-                
-                <!-- Kolom Kiri: Preview Video Lokal -->
-                <div class="lg:col-span-7 space-y-3">
-                    <div class="relative rounded-2xl overflow-hidden bg-meet-surface border border-zinc-800 aspect-video shadow-2xl flex items-center justify-center">
-                        <video id="lobbyPreviewVideo" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
-                        
-                        <!-- Placeholder saat kamera dimatikan di Lobby -->
-                        <div id="lobbyCamOffPlaceholder" class="hidden absolute inset-0 bg-meet-surface flex-col items-center justify-center text-center p-4">
-                            <div class="w-16 h-16 rounded-full bg-meet-card border border-zinc-700 flex items-center justify-center text-zinc-400 mb-3">
-                                <i data-lucide="video-off" class="w-8 h-8"></i>
-                            </div>
-                            <p class="text-sm font-medium text-zinc-300">Kamera Dinonaktifkan</p>
-                            <p class="text-xs text-zinc-500 mt-1">Klik ikon kamera di bawah untuk menyalakan</p>
-                        </div>
-
-                        <!-- Placeholder jika izin kamera ditolak -->
-                        <div id="lobbyPermissionError" class="hidden absolute inset-0 bg-meet-surface/95 flex-col items-center justify-center text-center p-6">
-                            <div class="w-14 h-14 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 mb-3">
-                                <i data-lucide="alert-triangle" class="w-7 h-7"></i>
-                            </div>
-                            <p class="text-sm font-semibold text-white">Akses Kamera / Mikrofon Diperlukan</p>
-                            <p id="lobbyErrorText" class="text-xs text-zinc-400 mt-1 max-w-sm">Pastikan browser mengizinkan akses kamera & mikrofon serta dibuka melalui HTTPS.</p>
-                            <button onclick="initLobbyMedia()" class="mt-4 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition">
-                                Coba Minta Izin Lagi
-                            </button>
-                        </div>
-
-                        <!-- Label Nama di Pojok Preview -->
-                        <div class="absolute bottom-3 left-3 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md text-xs font-medium text-white flex items-center gap-2 border border-white/10">
-                            <span id="lobbyMicIndicator" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                            <span id="lobbyNameBadge">Anda (Preview)</span>
-                        </div>
-
-                        <!-- Kontrol Pra-Gabung (Mic & Cam) -->
-                        <div class="absolute bottom-3 right-3 flex items-center gap-2">
-                            <button id="btnLobbyMic" onclick="toggleLobbyMic()" title="Matikan/Nyalakan Mikrofon" class="p-3 rounded-full bg-meet-card/90 hover:bg-meet-hover text-white border border-white/15 backdrop-blur-md transition shadow-lg">
-                                <i id="iconLobbyMic" data-lucide="mic" class="w-5 h-5"></i>
-                            </button>
-                            <button id="btnLobbyCam" onclick="toggleLobbyCam()" title="Matikan/Nyalakan Kamera" class="p-3 rounded-full bg-meet-card/90 hover:bg-meet-hover text-white border border-white/15 backdrop-blur-md transition shadow-lg">
-                                <i id="iconLobbyCam" data-lucide="video" class="w-5 h-5"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Peringatan HTTPS jika dibuka lewat file:// -->
-                    <div id="httpsWarning" class="hidden p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
-                        <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
-                        <span>Browser mewajibkan <strong>HTTPS</strong> untuk WebRTC. Upload file ini ke <strong>GitHub Pages</strong> agar kamera & mikrofon berfungsi lancar.</span>
-                    </div>
-                </div>
-
-                <!-- Kolom Kanan: Form Buat / Gabung Ruang -->
-                <div class="lg:col-span-5 bg-meet-surface border border-zinc-800/90 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6">
-                    <div>
-                        <h2 class="text-xl sm:text-2xl font-bold text-white">Siap untuk terhubung?</h2>
-                        <p class="text-xs sm:text-sm text-zinc-400 mt-1">Masukkan nama Anda, lalu buat ruang rapat baru atau gabung menggunakan kode undangan.</p>
-                    </div>
-
-                    <!-- Input Nama Tampilan -->
-                    <div class="space-y-1.5">
-                        <label for="displayNameInput" class="block text-xs font-medium text-zinc-300">Nama Tampilan Anda</label>
-                        <div class="relative">
-                            <i data-lucide="user" class="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
-                            <input type="text" id="displayNameInput" maxlength="25" placeholder="Contoh: Budi Santoso" oninput="updateLobbyNameBadge()" class="w-full pl-10 pr-4 py-3 rounded-xl bg-meet-bg border border-zinc-700/80 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition">
-                        </div>
-                    </div>
-
-                    <!-- Opsi A: Buat Ruang Baru -->
-                    <div class="pt-1">
-                        <button onclick="createNewRoom()" class="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white font-semibold text-sm transition shadow-lg shadow-blue-950/50 flex items-center justify-center gap-2">
-                            <i data-lucide="video" class="w-4 h-4"></i>
-                            <span>Buat Ruang Rapat Baru</span>
-                        </button>
-                    </div>
-
-                    <!-- Pemisah -->
-                    <div class="relative flex items-center py-1">
-                        <div class="flex-grow border-t border-zinc-800"></div>
-                        <span class="flex-shrink mx-3 text-xs text-zinc-500 uppercase tracking-wider font-medium">atau gabung ruang</span>
-                        <div class="flex-grow border-t border-zinc-800"></div>
-                    </div>
-
-                    <!-- Opsi B: Gabung Ruang yang Ada -->
-                    <div class="space-y-3">
-                        <div class="flex flex-col sm:flex-row gap-2.5">
-                            <div class="relative flex-1">
-                                <i data-lucide="hash" class="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
-                                <input type="text" id="joinRoomIdInput" placeholder="Masukkan Kode Ruang..." class="w-full pl-9 pr-3 py-3 rounded-xl bg-meet-bg border border-zinc-700/80 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono transition">
-                            </div>
-                            <button onclick="joinExistingRoom()" class="py-3 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-semibold text-sm transition flex items-center justify-center gap-2 shrink-0">
-                                <span>Gabung</span>
-                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                        <p id="inviteAutoFillNotice" class="hidden text-xs text-emerald-400 flex items-center gap-1.5">
-                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
-                            <span>Kode ruang terdeteksi otomatis dari tautan undangan!</span>
-                        </p>
-                    </div>
-                </div>
-
+            <div>
+                <h1 class="font-bold text-lg tracking-wide text-white">MeetGuard</h1>
+                <span class="text-xs text-indigo-400 font-medium">P2P Secure Video Conf</span>
             </div>
-        </main>
-    </div>
-
-    <!-- ==================== 2. HALAMAN RUANG RAPAT (CONFERENCE ROOM) ==================== -->
-    <div id="roomScreen" class="hidden fixed inset-0 bg-meet-bg flex-col z-40">
-        
-        <!-- Top Bar Ruang Rapat -->
-        <header class="h-14 px-4 border-b border-zinc-800/80 bg-meet-surface/90 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
-            <div class="flex items-center gap-3">
-                <div class="flex items-center gap-2">
-                    <span id="roomConnectionDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
-                    <span id="roomStatusLabel" class="text-xs sm:text-sm font-semibold text-white">Menunggu peserta...</span>
-                </div>
-                <span class="hidden sm:inline text-zinc-600">|</span>
-                <button onclick="copyInviteLink()" title="Salin Link Undangan" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-meet-card hover:bg-meet-hover border border-zinc-700/70 text-xs font-mono text-zinc-300 transition">
-                    <span id="headerRoomCode">------</span>
-                    <i data-lucide="copy" class="w-3.5 h-3.5 text-blue-400"></i>
-                </button>
-            </div>
-
-            <div class="flex items-center gap-2">
-                <span id="roomDurationClock" class="text-xs font-mono text-zinc-400 bg-meet-bg px-2.5 py-1 rounded-lg border border-zinc-800">00:00</span>
-                <button onclick="toggleRoomInfoModal(true)" title="Info & Link Undangan" class="p-2 rounded-xl bg-meet-card hover:bg-meet-hover text-zinc-300 border border-zinc-700/70 transition">
-                    <i data-lucide="info" class="w-4 h-4"></i>
-                </button>
-            </div>
-        </header>
-
-        <!-- Area Utama: Grid Video + Sidebar Chat -->
-        <div class="flex-1 flex relative overflow-hidden">
-            
-            <!-- Area Panggung Video -->
-            <div class="flex-1 relative bg-meet-bg flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-                
-                <!-- Container Video Lawan Bicara (Remote Video Utama) -->
-                <div class="relative w-full h-full max-w-6xl rounded-2xl overflow-hidden bg-meet-surface border border-zinc-800/90 shadow-2xl flex items-center justify-center">
-                    <video id="remoteVideo" autoplay playsinline class="w-full h-full object-contain"></video>
-
-                    <!-- Overlay Menunggu Lawan Bicara -->
-                    <div id="waitingPeerOverlay" class="absolute inset-0 bg-meet-surface flex flex-col items-center justify-center p-6 text-center z-10">
-                        <div class="w-16 h-16 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 mb-4 animate-ring">
-                            <i data-lucide="users" class="w-8 h-8"></i>
-                        </div>
-                        <h3 class="text-lg sm:text-xl font-bold text-white">Menunggu lawan bicara bergabung...</h3>
-                        <p class="text-xs sm:text-sm text-zinc-400 mt-1.5 max-w-md">
-                            Bagikan kode ruang atau tautan undangan di bawah ini kepada rekan Anda agar dapat langsung terhubung.
-                        </p>
-
-                        <!-- Kotak Salin Kode & Link di Tengah Layar -->
-                        <div class="mt-5 flex flex-col sm:flex-row items-center gap-2 w-full max-w-md">
-                            <div class="w-full px-3.5 py-2.5 rounded-xl bg-meet-bg border border-zinc-700 text-xs font-mono text-zinc-300 truncate select-all" id="waitingInviteUrlBox">
-                                Memuat tautan...
-                            </div>
-                            <button onclick="copyInviteLink()" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shrink-0">
-                                <i data-lucide="link" class="w-3.5 h-3.5"></i>
-                                <span>Salin Link</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Placeholder jika Lawan Bicara Mematikan Kamera -->
-                    <div id="remoteCamOffOverlay" class="hidden absolute inset-0 bg-meet-surface flex-col items-center justify-center p-6 text-center">
-                        <div class="w-20 h-20 rounded-full bg-meet-card border border-zinc-700 flex items-center justify-center text-2xl font-bold text-blue-400 mb-3" id="remoteAvatarInitial">
-                            ?
-                        </div>
-                        <p class="text-base font-semibold text-white" id="remoteCamOffName">Peserta</p>
-                        <p class="text-xs text-zinc-400 mt-1">Kamera dimatikan</p>
-                    </div>
-
-                    <!-- Badge Nama & Status Mic Lawan Bicara -->
-                    <div id="remoteNameTag" class="hidden absolute bottom-3 left-3 px-3 py-1.5 rounded-xl bg-black/65 backdrop-blur-md text-xs font-medium text-white flex items-center gap-2 border border-white/10 z-20">
-                        <i id="remoteMicIcon" data-lucide="mic" class="w-3.5 h-3.5 text-emerald-400"></i>
-                        <span id="remoteNameLabel">Lawan Bicara</span>
-                    </div>
-                </div>
-
-                <!-- Picture-in-Picture (PiP) Video Lokal (Diri Sendiri) -->
-                <div id="localPipContainer" class="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-32 sm:w-52 md:w-60 aspect-video rounded-xl overflow-hidden bg-meet-card border-2 border-zinc-700/90 shadow-2xl z-20 transition-all duration-200 cursor-move group">
-                    <video id="localRoomVideo" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
-                    
-                    <!-- Placeholder jika Kamera Sendiri Mati -->
-                    <div id="localRoomCamOff" class="hidden absolute inset-0 bg-meet-card flex-col items-center justify-center text-center p-2">
-                        <div class="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-300" id="localAvatarInitial">
-                            A
-                        </div>
-                        <span class="text-[10px] text-zinc-400 mt-1">Kamera Mati</span>
-                    </div>
-
-                    <!-- Label Nama & Status Mic Lokal -->
-                    <div class="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-sm text-[10px] sm:text-xs text-white">
-                        <span class="truncate max-w-[80%]" id="localRoomNameLabel">Anda</span>
-                        <i id="localRoomMicIcon" data-lucide="mic" class="w-3 h-3 text-emerald-400 shrink-0"></i>
-                    </div>
-
-                    <!-- Tombol Perkecil/Sembunyikan PiP -->
-                    <button onclick="togglePipSize()" title="Ubah Ukuran PiP" class="opacity-0 group-hover:opacity-100 absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 text-white transition">
-                        <i data-lucide="maximize-2" class="w-3 h-3"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Panel Samping Chat Real-Time -->
-            <aside id="chatPanel" class="hidden w-full sm:w-80 md:w-96 bg-meet-surface border-l border-zinc-800 flex-col z-30 absolute sm:relative inset-0 sm:inset-auto">
-                <div class="h-14 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
-                    <div class="flex items-center gap-2">
-                        <i data-lucide="message-square" class="w-4 h-4 text-blue-400"></i>
-                        <h3 class="font-semibold text-sm text-white">Pesan dalam Rapat</h3>
-                    </div>
-                    <button onclick="toggleChatPanel()" class="p-1.5 rounded-lg hover:bg-meet-hover text-zinc-400 hover:text-white transition">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-
-                <!-- Daftar Pesan -->
-                <div id="chatMessagesContainer" class="flex-1 p-4 overflow-y-auto space-y-3">
-                    <div class="p-3 rounded-xl bg-meet-bg/80 border border-zinc-800/80 text-[11px] text-zinc-400 text-center">
-                        Pesan dikirim langsung antar peserta (Peer-to-Peer) dan tidak disimpan di server mana pun.
-                    </div>
-                </div>
-
-                <!-- Form Kirim Pesan -->
-                <form onsubmit="sendChatMessage(event)" class="p-3 border-t border-zinc-800 bg-meet-surface flex items-center gap-2">
-                    <input type="text" id="chatInput" placeholder="Ketik pesan..." autocomplete="off" class="flex-1 px-3.5 py-2.5 rounded-xl bg-meet-bg border border-zinc-700/80 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500">
-                    <button type="submit" class="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition shrink-0">
-                        <i data-lucide="send" class="w-4 h-4"></i>
-                    </button>
-                </form>
-            </aside>
         </div>
+        <div>
+            <button onclick="toggleGuide()" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg text-gray-300 border border-gray-700 transition">
+                <i class="fa-solid fa-circle-question mr-1"></i> Panduan
+            </button>
+        </div>
+    </header>
 
-        <!-- Bilah Kontrol Bawah (Control Bar ala Google Meet) -->
-        <footer class="h-20 px-3 sm:px-6 bg-meet-surface border-t border-zinc-800/90 flex items-center justify-between shrink-0 z-20">
-            
-            <!-- Info Kiri (Desktop) -->
-            <div class="hidden md:flex items-center gap-2 text-xs text-zinc-400 w-1/4">
-                <span class="font-mono text-zinc-300" id="footerRoomCode">------</span>
-                <span>•</span>
-                <span>WebRTC P2P</span>
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow flex items-center justify-center p-4">
+
+        <!-- LOBBY VIEW (PRA-RAPAT) -->
+        <div id="lobbyView" class="w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl glass">
+            <h2 class="text-xl font-bold mb-1 text-white">Mulai atau Gabung Rapat</h2>
+            <p class="text-xs text-gray-400 mb-6">Aktifkan kamera dan masukkan nama Anda.</p>
+
+            <!-- Video Preview Box -->
+            <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4 border border-gray-800 shadow-inner flex items-center justify-center">
+                <video id="previewVideo" autoplay playsinline muted class="w-full h-full object-cover mirror"></video>
+                
+                <!-- Tombol Paksa Nyalakan Kamera Jika Diblokir Browser -->
+                <div id="camOverlay" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-gray-950/90">
+                    <i class="fa-solid fa-camera text-indigo-400 text-3xl mb-2"></i>
+                    <p class="text-xs text-gray-300 mb-3">Klik tombol di bawah untuk mengizinkan kamera HP Anda.</p>
+                    <button onclick="initPreview()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition">
+                        Nyalakan Kamera
+                    </button>
+                </div>
+
+                <div class="absolute bottom-3 left-3 bg-black/60 px-2.5 py-1 rounded-md text-[10px] text-gray-300 backdrop-blur-sm z-10">
+                    <span id="previewStatus" class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span> Siap
+                </div>
             </div>
 
-            <!-- Tombol Kontrol Tengah -->
-            <div class="flex items-center justify-center gap-2 sm:gap-3 mx-auto">
-                <!-- Toggle Mic -->
-                <button id="btnRoomMic" onclick="toggleRoomMic()" title="Mikrofon (Mute/Unmute)" class="p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition">
-                    <i id="iconRoomMic" data-lucide="mic" class="w-5 h-5"></i>
-                </button>
-
-                <!-- Toggle Camera -->
-                <button id="btnRoomCam" onclick="toggleRoomCam()" title="Kamera (On/Off)" class="p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition">
-                    <i id="iconRoomCam" data-lucide="video" class="w-5 h-5"></i>
-                </button>
-
-                <!-- Ganti Kamera Depan/Belakang (Mobile) -->
-                <button id="btnSwitchCam" onclick="switchRoomCamera()" title="Putar Kamera Depan/Belakang" class="p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition">
-                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-                </button>
-
-                <!-- Bagikan Layar (Screen Share) -->
-                <button id="btnScreenShare" onclick="toggleScreenShare()" title="Bagikan Layar" class="p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition">
-                    <i data-lucide="monitor-up" class="w-5 h-5"></i>
-                </button>
-
-                <!-- Toggle Chat -->
-                <button id="btnToggleChat" onclick="toggleChatPanel()" title="Obrolan Teks" class="relative p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition">
-                    <i data-lucide="message-square" class="w-5 h-5"></i>
-                    <span id="chatUnreadBadge" class="hidden absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-meet-surface"></span>
-                </button>
-
-                <!-- Akhiri Panggilan (End Call) -->
-                <button onclick="leaveRoom()" title="Keluar dari Rapat" class="px-5 py-3.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 text-white font-semibold text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-red-950/50 ml-1">
-                    <i data-lucide="phone-off" class="w-5 h-5"></i>
-                    <span class="hidden sm:inline">Keluar</span>
-                </button>
+            <!-- Input Nama -->
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-400 mb-1">Nama Anda</label>
+                <input type="text" id="userNameInput" placeholder="Cont. Budi Santoso" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition">
             </div>
 
-            <!-- Ruang Kanan (Desktop) -->
-            <div class="hidden md:flex items-center justify-end gap-2 w-1/4">
-                <button onclick="copyInviteLink()" class="px-3 py-2 rounded-xl bg-meet-card hover:bg-meet-hover text-xs font-medium text-zinc-200 border border-zinc-700/60 flex items-center gap-1.5 transition">
-                    <i data-lucide="user-plus" class="w-4 h-4 text-blue-400"></i>
-                    <span>Undang</span>
-                </button>
-            </div>
-        </footer>
-    </div>
+            <!-- Tombol Buat Ruang -->
+            <button onclick="createRoom()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center space-x-2 text-sm mb-4">
+                <i class="fa-solid fa-video"></i>
+                <span>Buat Ruang Rapat Baru</span>
+            </button>
 
-    <!-- ==================== MODAL INFO RUANG & UNDANGAN ==================== -->
-    <div id="roomInfoModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-        <div class="bg-meet-surface border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h3 class="text-base font-bold text-white flex items-center gap-2">
-                    <i data-lucide="share-2" class="w-4 h-4 text-blue-400"></i>
-                    <span>Detail & Undangan Rapat</span>
-                </h3>
-                <button onclick="toggleRoomInfoModal(false)" class="p-1.5 rounded-lg bg-meet-card text-zinc-400 hover:text-white">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
+            <div class="relative flex py-2 items-center mb-4">
+                <div class="flex-grow border-t border-gray-800"></div>
+                <span class="flex-shrink mx-4 text-gray-500 text-[10px] uppercase tracking-wider">Atau Gabung Ruang</span>
+                <div class="flex-grow border-t border-gray-800"></div>
             </div>
 
+            <!-- Input Gabung Ruang -->
             <div class="space-y-3">
-                <div>
-                    <label class="block text-xs text-zinc-400 mb-1">Kode Ruang</label>
-                    <div class="flex items-center gap-2">
-                        <code id="modalRoomCodeText" class="flex-1 px-3 py-2 rounded-xl bg-meet-bg border border-zinc-700 text-sm font-mono font-bold text-blue-400">------</code>
-                        <button onclick="copyRoomCodeOnly()" class="px-3 py-2 rounded-xl bg-meet-card hover:bg-meet-hover text-xs font-medium text-white border border-zinc-700">
-                            Salin Kode
-                        </button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs text-zinc-400 mb-1">Tautan Undangan Langsung</label>
-                    <div class="flex items-center gap-2">
-                        <input type="text" id="modalInviteLinkInput" readonly class="flex-1 px-3 py-2 rounded-xl bg-meet-bg border border-zinc-700 text-xs font-mono text-zinc-300 focus:outline-none">
-                        <button onclick="copyInviteLink()" class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white">
-                            Salin Link
-                        </button>
-                    </div>
-                </div>
-
-                <div class="p-3 rounded-xl bg-meet-bg border border-zinc-800 text-xs text-zinc-400 space-y-1">
-                    <div class="flex justify-between">
-                        <span>Status Koneksi:</span>
-                        <span id="modalConnStatus" class="text-amber-400 font-medium">Menunggu peserta</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Peserta Terhubung:</span>
-                        <span id="modalRemotePeerName" class="text-white font-medium">-</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== MODAL PANDUAN GITHUB PAGES ==================== -->
-    <div id="helpModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-        <div class="bg-meet-surface border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h3 class="text-base font-bold text-white">Cara Hosting Gratis di GitHub Pages</h3>
-                <button onclick="toggleHelpModal(false)" class="p-1.5 rounded-lg bg-meet-card text-zinc-400 hover:text-white">
-                    <i data-lucide="x" class="w-4 h-4"></i>
+                <input type="text" id="roomCodeInput" placeholder="Masukkan Kode Ruang" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition">
+                <button onclick="joinRoom()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center space-x-2 text-sm">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>Gabung Rapat</span>
                 </button>
             </div>
-            
-            <ol class="space-y-2.5 text-xs sm:text-sm text-zinc-300 list-decimal list-inside">
-                <li>Simpan file ini dengan nama <code class="text-blue-400 font-mono bg-meet-bg px-1.5 py-0.5 rounded">index.html</code>.</li>
-                <li>Buat repositori baru (Public) di akun <strong>GitHub</strong> Anda.</li>
-                <li>Upload file <code class="text-blue-400 font-mono">index.html</code> ke repositori tersebut.</li>
-                <li>Buka <strong>Settings &rarr; Pages</strong>, pilih Branch <strong>main</strong>, lalu klik <strong>Save</strong>.</li>
-                <li>Gunakan URL HTTPS dari GitHub Pages untuk memulai panggilan video dari HP maupun Laptop.</li>
-            </ol>
+        </div>
 
-            <button onclick="toggleHelpModal(false)" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition">
-                Tutup Panduan
+        <!-- ROOM VIEW (RUANG RAPAT UTAMA) -->
+        <div id="roomView" class="w-full max-w-6xl hidden flex flex-col h-[85vh]">
+            <div class="flex items-center justify-between bg-gray-900/80 px-4 py-2.5 rounded-xl border border-gray-800 mb-3 glass">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-xs text-gray-300 font-medium">Ruang: <span id="displayRoomId" class="text-white font-mono font-bold select-all bg-gray-800 px-2 py-0.5 rounded"></span></span>
+                </div>
+                <button onclick="copyInviteLink()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-gray-700 transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-link text-indigo-400"></i>
+                    <span>Salin Link</span>
+                </button>
+            </div>
+
+            <!-- Grid Video Peserta -->
+            <div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 relative overflow-hidden mb-3">
+                <div class="relative bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden flex items-center justify-center shadow-xl">
+                    <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover mirror"></video>
+                    <div class="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-lg text-xs text-white backdrop-blur-md flex items-center space-x-2">
+                        <i class="fa-solid fa-user text-indigo-400"></i>
+                        <span id="localNameLabel">Anda</span>
+                    </div>
+                </div>
+
+                <div class="relative bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden flex items-center justify-center shadow-xl">
+                    <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <div id="waitingOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4 text-center">
+                        <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p class="text-sm font-medium text-gray-300">Menunggu peserta lain bergabung...</p>
+                    </div>
+                    <div class="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-lg text-xs text-white backdrop-blur-md flex items-center space-x-2">
+                        <i class="fa-solid fa-user-group text-emerald-400"></i>
+                        <span id="remoteNameLabel">Peserta Lain</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Bar -->
+            <div class="flex items-center justify-center space-x-3 bg-gray-900/90 py-3 px-6 rounded-2xl border border-gray-800 glass shadow-2xl">
+                <button onclick="toggleMic()" id="micBtn" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition border border-gray-700 shadow-md">
+                    <i class="fa-solid fa-microphone text-sm"></i>
+                </button>
+                <button onclick="toggleCam()" id="camBtn" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition border border-gray-700 shadow-md">
+                    <i class="fa-solid fa-video text-sm"></i>
+                </button>
+                <button onclick="switchCamera()" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition border border-gray-700 shadow-md md:hidden">
+                    <i class="fa-solid fa-camera-rotate text-sm"></i>
+                </button>
+                <button onclick="toggleChat()" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition border border-gray-700 shadow-md relative">
+                    <i class="fa-solid fa-comment-dots text-sm"></i>
+                    <span id="chatBadge" class="absolute top-2 right-2 w-2.5 h-2.5 bg-indigo-500 rounded-full hidden"></span>
+                </button>
+                <button onclick="leaveRoom()" class="w-12 h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shadow-red-600/30">
+                    <i class="fa-solid fa-phone-slash text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- CHAT DRAWER -->
+    <div id="chatDrawer" class="fixed inset-y-0 right-0 w-80 bg-gray-900 border-l border-gray-800 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col">
+        <div class="p-4 border-b border-gray-800 flex items-center justify-between glass">
+            <h3 class="font-bold text-sm text-white flex items-center space-x-2">
+                <i class="fa-solid fa-comments text-indigo-400"></i>
+                <span>Pesan Ruangan</span>
+            </h3>
+            <button onclick="toggleChat()" class="text-gray-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="chatMessages" class="flex-grow p-4 overflow-y-auto space-y-3 text-xs">
+            <div class="text-center text-gray-500 my-2">Pesan terenkripsi peer-to-peer.</div>
+        </div>
+        <div class="p-3 border-t border-gray-800 glass flex items-center space-x-2">
+            <input type="text" id="chatInput" placeholder="Ketik pesan..." onkeypress="handleChatKeyPress(event)" class="flex-grow bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <button onclick="sendChatMessage()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-semibold transition">
+                <i class="fa-solid fa-paper-plane"></i>
             </button>
         </div>
     </div>
 
-    <!-- ==================== LOGIKA JAVASCRIPT WEBRTC & PEERJS ==================== -->
+    <!-- PANDUAN MODAL -->
+    <div id="guideModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl glass">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-base text-white">Panduan Penggunaan</h3>
+                <button onclick="toggleGuide()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <ul class="space-y-2.5 text-xs text-gray-300 list-disc list-inside mb-5">
+                <li>Klik tombol **Nyalakan Kamera** di kotak hitam jika gambar tidak langsung muncul.</li>
+                <li>Buat ruang rapat baru dan bagikan tautannya ke perangkat lain.</li>
+            </ul>
+            <button onclick="toggleGuide()" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-xl font-medium text-xs border border-gray-700 transition">Mengerti</button>
+        </div>
+    </div>
+
     <script>
-        // Konfigurasi STUN & TURN Server Publik agar tembus lintas jaringan (Wi-Fi <-> Seluler)
-        const PEER_CONFIG = {
-            debug: 1,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    {
-                        urls: 'turn:openrelay.metered.ca:80',
-                        username: 'openrelayproject',
-                        credential: 'openrelayproject'
-                    },
-                    {
-                        urls: 'turn:openrelay.metered.ca:443',
-                        username: 'openrelayproject',
-                        credential: 'openrelayproject'
-                    }
-                ]
-            }
-        };
-
-        // State Aplikasi
-        let peer = null;
         let localStream = null;
-        let screenStream = null;
-        let remoteStream = null;
-        let dataConn = null;
-        let mediaCall = null;
-
-        let myDisplayName = 'Peserta';
-        let remoteDisplayName = 'Lawan Bicara';
+        let peer = null;
+        let activeConnection = null;
+        let activeCall = null;
         let currentRoomId = '';
-        let isRoomHost = false;
+        let currentFacingMode = 'user';
+        let isMicMuted = false;
+        let isCamOff = false;
 
-        let isMicEnabled = true;
-        let isCamEnabled = true;
-        let isScreenSharing = false;
-        let currentFacingMode = 'user'; // Default kamera depan untuk video conference
-        let isChatOpen = false;
-        let isPipExpanded = false;
-        let callTimerInterval = null;
-        let callSeconds = 0;
-
-        // Inisialisasi saat halaman dimuat
-        window.addEventListener('DOMContentLoaded', async () => {
-            lucide.createIcons();
-            startLobbyClock();
-
-            // Cek protokol HTTPS
-            const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-            if (location.protocol !== 'https:' && !isLocalhost) {
-                document.getElementById('httpsWarning').classList.remove('hidden');
-            }
-
-            // Cek parameter URL ?room=KODE_RUANG untuk undangan otomatis
+        window.addEventListener('DOMContentLoaded', () => {
+            initPreview();
             const urlParams = new URLSearchParams(window.location.search);
-            const invitedRoom = urlParams.get('room');
-            if (invitedRoom) {
-                document.getElementById('joinRoomIdInput').value = invitedRoom.trim();
-                document.getElementById('inviteAutoFillNotice').classList.remove('hidden');
+            const roomParam = urlParams.get('room');
+            if (roomParam) {
+                document.getElementById('roomCodeInput').value = roomParam;
             }
-
-            // Muat nama tersimpan jika ada
-            const savedName = localStorage.getItem('meetguard_name');
-            if (savedName) {
-                document.getElementById('displayNameInput').value = savedName;
-                updateLobbyNameBadge();
-            }
-
-            // Mulai preview kamera & mikrofon di lobby
-            await initLobbyMedia();
-            setupDraggablePip();
         });
 
-        // ==================== UTILITAS UI & TOAST ====================
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            
-            const styles = {
-                info: 'bg-meet-card/95 border-zinc-700 text-white',
-                success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200',
-                error: 'bg-red-950/95 border-red-500/50 text-red-200',
-                warning: 'bg-amber-950/95 border-amber-500/50 text-amber-200'
-            };
+        async function initPreview() {
+            const previewVideo = document.getElementById('previewVideo');
+            const camOverlay = document.getElementById('camOverlay');
 
-            toast.className = `px-4 py-3 rounded-xl border backdrop-blur-md shadow-2xl text-xs sm:text-sm font-medium transition-all duration-300 transform translate-y-0 opacity-100 text-center ${styles[type] || styles.info}`;
-            toast.textContent = message;
-            
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.classList.add('opacity-0', '-translate-y-2');
-                setTimeout(() => toast.remove(), 300);
-            }, 3500);
-        }
-
-        function startLobbyClock() {
-            const update = () => {
-                const now = new Date();
-                const el = document.getElementById('lobbyClock');
-                if (el) el.textContent = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            };
-            update();
-            setInterval(update, 10000);
-        }
-
-        function updateLobbyNameBadge() {
-            const val = document.getElementById('displayNameInput').value.trim();
-            document.getElementById('lobbyNameBadge').textContent = val ? `${val} (Anda)` : 'Anda (Preview)';
-        }
-
-        function toggleHelpModal(show) {
-            const modal = document.getElementById('helpModal');
-            modal.classList.toggle('hidden', !show);
-            modal.classList.toggle('flex', show);
-        }
-
-        function toggleRoomInfoModal(show) {
-            const modal = document.getElementById('roomInfoModal');
-            modal.classList.toggle('hidden', !show);
-            modal.classList.toggle('flex', show);
-        }
-
-        // ==================== MEDIA LOBBY (PRA-RAPAT) ====================
-        async function initLobbyMedia() {
-            document.getElementById('lobbyPermissionError').classList.add('hidden');
             try {
                 if (localStream) {
-                    localStream.getTracks().forEach(t => t.stop());
+                    localStream.getTracks().forEach(track => track.stop());
                 }
+
+                // Meminta akses media dengan opsi fallback fleksibel
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    video: { facingMode: currentFacingMode },
                     audio: true
                 });
 
-                const previewEl = document.getElementById('lobbyPreviewVideo');
-                previewEl.srcObject = localStream;
-                isMicEnabled = true;
-                isCamEnabled = true;
-                updateLobbyMediaButtons();
+                previewVideo.srcObject = localStream;
+                await previewVideo.play().catch(e => console.log("Autoplay play warning:", e));
+                
+                // Sembunyikan overlay tombol jika berhasil
+                camOverlay.classList.add('hidden');
             } catch (err) {
-                console.warn('Gagal mengakses media di lobby:', err);
-                document.getElementById('lobbyPermissionError').classList.remove('hidden');
-                document.getElementById('lobbyPermissionError').classList.add('flex');
-                if (err.name === 'NotAllowedError') {
-                    document.getElementById('lobbyErrorText').textContent = 'Izin kamera/mikrofon ditolak oleh browser. Klik ikon gembok di bilah alamat untuk mengizinkan.';
-                } else {
-                    document.getElementById('lobbyErrorText').textContent = 'Perangkat kamera/mikrofon tidak ditemukan atau sedang dipakai aplikasi lain.';
-                }
+                console.error("Gagal mendapatkan akses kamera:", err);
+                camOverlay.classList.remove('hidden');
+                alert("Gagal mengakses kamera/mikrofon. Pastikan izin situs diizinkan di browser.");
             }
         }
 
-        function toggleLobbyMic() {
-            if (!localStream) return;
-            isMicEnabled = !isMicEnabled;
-            localStream.getAudioTracks().forEach(track => track.enabled = isMicEnabled);
-            updateLobbyMediaButtons();
+        function generateRoomId() {
+            return Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 6);
         }
 
-        function toggleLobbyCam() {
-            if (!localStream) return;
-            isCamEnabled = !isCamEnabled;
-            localStream.getVideoTracks().forEach(track => track.enabled = isCamEnabled);
-            updateLobbyMediaButtons();
+        function createRoom() {
+            const roomId = generateRoomId();
+            startMeeting(roomId);
         }
 
-        function updateLobbyMediaButtons() {
-            const btnMic = document.getElementById('btnLobbyMic');
-            const iconMic = document.getElementById('iconLobbyMic');
-            const indicator = document.getElementById('lobbyMicIndicator');
+        function joinRoom() {
+            const roomId = document.getElementById('roomCodeInput').value.trim();
+            if (!roomId) {
+                alert('Silakan masukkan kode ruang terlebih dahulu.');
+                return;
+            }
+            startMeeting(roomId);
+        }
 
-            if (isMicEnabled) {
-                btnMic.className = 'p-3 rounded-full bg-meet-card/90 hover:bg-meet-hover text-white border border-white/15 backdrop-blur-md transition shadow-lg';
-                iconMic.setAttribute('data-lucide', 'mic');
-                indicator.className = 'w-2 h-2 rounded-full bg-emerald-400';
-            } else {
-                btnMic.className = 'p-3 rounded-full bg-red-600 hover:bg-red-500 text-white border border-red-400/30 backdrop-blur-md transition shadow-lg';
-                iconMic.setAttribute('data-lucide', 'mic-off');
-                indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+        function startMeeting(roomId) {
+            currentRoomId = roomId;
+            const name = document.getElementById('userNameInput').value.trim() || 'Tamu';
+            
+            document.getElementById('lobbyView').classList.add('hidden');
+            document.getElementById('roomView').classList.remove('hidden');
+            document.getElementById('displayRoomId').innerText = roomId;
+            document.getElementById('localNameLabel').innerText = name;
+
+            const localVideo = document.getElementById('localVideo');
+            if (localStream) {
+                localVideo.srcObject = localStream;
+                localVideo.play().catch(e => console.log(e));
             }
 
-            const btnCam = document.getElementById('btnLobbyCam');
-            const iconCam = document.getElementById('iconLobbyCam');
-            const placeholder = document.getElementById('lobbyCamOffPlaceholder');
-
-            if (isCamEnabled) {
-                btnCam.className = 'p-3 rounded-full bg-meet-card/90 hover:bg-meet-hover text-white border border-white/15 backdrop-blur-md transition shadow-lg';
-                iconCam.setAttribute('data-lucide', 'video');
-                placeholder.classList.add('hidden');
-                placeholder.classList.remove('flex');
-            } else {
-                btnCam.className = 'p-3 rounded-full bg-red-600 hover:bg-red-500 text-white border border-red-400/30 backdrop-blur-md transition shadow-lg';
-                iconCam.setAttribute('data-lucide', 'video-off');
-                placeholder.classList.remove('hidden');
-                placeholder.classList.add('flex');
-            }
-            lucide.createIcons();
-        }
-
-        // ==================== BUAT / GABUNG RUANG RAPAT ====================
-        function prepareDisplayName() {
-            const inputName = document.getElementById('displayNameInput').value.trim();
-            myDisplayName = inputName || 'Tamu-' + Math.floor(100 + Math.random() * 900);
-            localStorage.setItem('meetguard_name', myDisplayName);
-        }
-
-        function generateRoomCode() {
-            const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
-            const part = (len) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-            return `${part(3)}-${part(4)}-${part(3)}`;
-        }
-
-        async function createNewRoom() {
-            prepareDisplayName();
-            isRoomHost = true;
-            currentRoomId = generateRoomCode();
-            enterRoomUI();
-
-            // Host mendaftarkan Peer dengan ID = currentRoomId
-            peer = new Peer(currentRoomId, PEER_CONFIG);
+            peer = new Peer('meetguard-' + roomId);
 
             peer.on('open', (id) => {
-                updateRoomInviteLinks(id);
-                showToast('Ruang rapat siap! Bagikan link undangan ke lawan bicara.', 'success');
+                console.log('Peer terhubung:', id);
             });
 
-            // Host menerima koneksi DataConnection dari peserta yang bergabung
             peer.on('connection', (conn) => {
-                if (dataConn && dataConn.open) {
-                    // Tolak jika ruangan sudah penuh (1-on-1 P2P)
-                    conn.on('open', () => {
-                        conn.send({ type: 'ROOM_FULL' });
-                        setTimeout(() => conn.close(), 500);
-                    });
-                    return;
-                }
-                setupDataConnection(conn);
+                setupConnection(conn);
             });
 
-            // Host menerima panggilan video/audio dari peserta
             peer.on('call', (call) => {
-                mediaCall = call;
-                call.answer(localStream || undefined);
-                handleMediaCallEvents(call);
+                activeCall = call;
+                call.answer(localStream);
+                call.on('stream', (remoteStream) => {
+                    handleRemoteStream(remoteStream);
+                });
             });
 
             peer.on('error', (err) => {
-                console.error('Peer Host Error:', err);
-                showToast(`Gangguan koneksi (${err.type}). Silakan muat ulang.`, 'error');
-            });
-        }
-
-        async function joinExistingRoom() {
-            const targetRoom = document.getElementById('joinRoomIdInput').value.trim().toLowerCase();
-            if (!targetRoom) {
-                showToast('Harap masukkan Kode Ruang terlebih dahulu!', 'warning');
-                return;
-            }
-
-            prepareDisplayName();
-            isRoomHost = false;
-            currentRoomId = targetRoom;
-            enterRoomUI();
-            updateRoomInviteLinks(currentRoomId);
-            document.getElementById('roomStatusLabel').textContent = 'Menghubungkan ke ruang...';
-
-            // Tamu menggunakan ID acak dari PeerJS lalu menghubungi Host (targetRoom)
-            peer = new Peer(PEER_CONFIG);
-
-            peer.on('open', () => {
-                const conn = peer.connect(currentRoomId, { reliable: true });
-                setupDataConnection(conn);
-
-                // Panggil Host dengan stream video/audio lokal
-                const call = peer.call(currentRoomId, localStream || createEmptyMediaStream());
-                mediaCall = call;
-                handleMediaCallEvents(call);
-            });
-
-            peer.on('error', (err) => {
-                console.error('Peer Guest Error:', err);
-                if (err.type === 'peer-unavailable') {
-                    showToast('Kode ruang tidak ditemukan atau rapat sudah berakhir.', 'error');
-                    leaveRoom();
+                if (err.type === 'unavailable-id') {
+                    peer.destroy();
+                    peer = new Peer();
+                    peer.on('open', () => {
+                        connectToHost(roomId, name);
+                    });
                 } else {
-                    showToast(`Gagal terhubung: ${err.type}`, 'error');
+                    console.error('Peer error:', err);
                 }
             });
         }
 
-        // Stream kosong cadangan jika pengguna bergabung tanpa kamera & mikrofon sama sekali
-        function createEmptyMediaStream() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 640;
-            canvas.height = 480;
-            return canvas.captureStream(1);
-        }
-
-        function enterRoomUI() {
-            document.getElementById('lobbyScreen').classList.add('hidden');
-            document.getElementById('roomScreen').classList.remove('hidden');
-            document.getElementById('roomScreen').classList.add('flex');
-
-            // Pindahkan preview video lokal ke kotak PiP ruang rapat
-            const localRoomVid = document.getElementById('localRoomVideo');
-            localRoomVid.srcObject = localStream;
-            document.getElementById('localRoomNameLabel').textContent = `${myDisplayName} (Anda)`;
-            document.getElementById('localAvatarInitial').textContent = myDisplayName.charAt(0).toUpperCase();
-
-            updateRoomMediaButtons();
-            startCallTimer();
-        }
-
-        function updateRoomInviteLinks(roomId) {
-            const baseUrl = window.location.origin + window.location.pathname;
-            const inviteUrl = `${baseUrl}?room=${roomId}`;
-
-            document.getElementById('headerRoomCode').textContent = roomId;
-            document.getElementById('footerRoomCode').textContent = roomId;
-            document.getElementById('modalRoomCodeText').textContent = roomId;
-            document.getElementById('modalInviteLinkInput').value = inviteUrl;
-            document.getElementById('waitingInviteUrlBox').textContent = inviteUrl;
-
-            // Perbarui URL browser tanpa reload agar mudah di-copy
-            window.history.replaceState({}, '', `?room=${roomId}`);
-        }
-
-        // ==================== KONEKSI DATA (CHAT & STATUS) & MEDIA WEBRTC ====================
-        function setupDataConnection(conn) {
-            dataConn = conn;
-
-            conn.on('open', () => {
-                // Kirim profil & status media saat ini ke lawan bicara
-                conn.send({
-                    type: 'PEER_INFO',
-                    name: myDisplayName,
-                    micEnabled: isMicEnabled,
-                    camEnabled: isCamEnabled
-                });
+        function connectToHost(roomId, name) {
+            const conn = peer.connect('meetguard-' + roomId, {
+                metadata: { userName: name }
             });
+            setupConnection(conn);
 
+            const call = peer.call('meetguard-' + roomId, localStream, {
+                metadata: { userName: name }
+            });
+            activeCall = call;
+            call.on('stream', (remoteStream) => {
+                handleRemoteStream(remoteStream);
+            });
+        }
+
+        function setupConnection(conn) {
+            activeConnection = conn;
             conn.on('data', (data) => {
-                if (data.type === 'ROOM_FULL') {
-                    showToast('Ruang rapat sudah penuh (maksimal 2 peserta P2P).', 'error');
-                    leaveRoom();
-                } else if (data.type === 'PEER_INFO') {
-                    remoteDisplayName = data.name || 'Peserta';
-                    document.getElementById('remoteNameLabel').textContent = remoteDisplayName;
-                    document.getElementById('remoteCamOffName').textContent = remoteDisplayName;
-                    document.getElementById('remoteAvatarInitial').textContent = remoteDisplayName.charAt(0).toUpperCase();
-                    document.getElementById('modalRemotePeerName').textContent = remoteDisplayName;
-                    
-                    updateRemoteMediaState(data.micEnabled, data.camEnabled);
-                    showToast(`${remoteDisplayName} bergabung ke rapat`, 'success');
-                } else if (data.type === 'MEDIA_STATE') {
-                    updateRemoteMediaState(data.micEnabled, data.camEnabled);
-                } else if (data.type === 'CHAT_MESSAGE') {
-                    appendChatMessage(data.sender, data.text, data.time, false);
-                    if (!isChatOpen) {
-                        document.getElementById('chatUnreadBadge').classList.remove('hidden');
-                        showToast(`Pesan baru dari ${data.sender}`, 'info');
-                    }
+                if (data.type === 'chat') {
+                    appendChatMessage(data.sender, data.text);
                 }
             });
-
-            conn.on('close', () => {
-                handleRemotePeerDisconnected();
+            conn.on('open', () => {
+                if (conn.metadata && conn.metadata.userName) {
+                    document.getElementById('remoteNameLabel').innerText = conn.metadata.userName;
+                }
             });
         }
 
-        function handleMediaCallEvents(call) {
-            call.on('stream', (stream) => {
-                remoteStream = stream;
-                const remoteVideo = document.getElementById('remoteVideo');
-                remoteVideo.srcObject = stream;
-
-                // Sembunyikan layar tunggu, tampilkan video lawan bicara
-                document.getElementById('waitingPeerOverlay').classList.add('hidden');
-                document.getElementById('remoteNameTag').classList.remove('hidden');
-                
-                document.getElementById('roomConnectionDot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
-                document.getElementById('roomStatusLabel').textContent = 'Terhubung (2 Peserta)';
-                document.getElementById('modalConnStatus').textContent = 'Terhubung (P2P Aktif)';
-                document.getElementById('modalConnStatus').className = 'text-emerald-400 font-medium';
-            });
-
-            call.on('close', () => {
-                handleRemotePeerDisconnected();
-            });
+        function handleRemoteStream(stream) {
+            const remoteVideo = document.getElementById('remoteVideo');
+            remoteVideo.srcObject = stream;
+            remoteVideo.play().catch(e => console.log(e));
+            document.getElementById('waitingOverlay').classList.add('hidden');
         }
 
-        function handleRemotePeerDisconnected() {
-            remoteStream = null;
-            document.getElementById('remoteVideo').srcObject = null;
-            document.getElementById('waitingPeerOverlay').classList.remove('hidden');
-            document.getElementById('remoteNameTag').classList.add('hidden');
-            document.getElementById('remoteCamOffOverlay').classList.add('hidden');
-
-            document.getElementById('roomConnectionDot').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
-            document.getElementById('roomStatusLabel').textContent = 'Lawan bicara keluar • Menunggu...';
-            document.getElementById('modalConnStatus').textContent = 'Menunggu peserta';
-            document.getElementById('modalConnStatus').className = 'text-amber-400 font-medium';
-            document.getElementById('modalRemotePeerName').textContent = '-';
-            showToast(`${remoteDisplayName} meninggalkan rapat.`, 'warning');
+        function toggleMic() {
+            if (!localStream) return;
+            isMicMuted = !isMicMuted;
+            localStream.getAudioTracks().forEach(track => track.enabled = !isMicMuted);
+            const btn = document.getElementById('micBtn');
+            btn.className = isMicMuted 
+                ? "w-12 h-12 rounded-xl bg-red-600 text-white flex items-center justify-center transition shadow-lg shadow-red-600/30"
+                : "w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition border border-gray-700";
+            btn.innerHTML = `<i class="fa-solid fa-microphone${isMicMuted ? '-slash' : ''} text-sm"></i>`;
         }
 
-        function updateRemoteMediaState(micOn, camOn) {
-            const micIcon = document.getElementById('remoteMicIcon');
-            if (micOn) {
-                micIcon.setAttribute('data-lucide', 'mic');
-                micIcon.className = 'w-3.5 h-3.5 text-emerald-400';
-            } else {
-                micIcon.setAttribute('data-lucide', 'mic-off');
-                micIcon.className = 'w-3.5 h-3.5 text-red-400';
-            }
-
-            const camOffOverlay = document.getElementById('remoteCamOffOverlay');
-            if (camOn) {
-                camOffOverlay.classList.add('hidden');
-                camOffOverlay.classList.remove('flex');
-            } else {
-                camOffOverlay.classList.remove('hidden');
-                camOffOverlay.classList.add('flex');
-            }
-            lucide.createIcons();
+        function toggleCam() {
+            if (!localStream) return;
+            isCamOff = !isCamOff;
+            localStream.getVideoTracks().forEach(track => track.enabled = !isCamOff);
+            const btn = document.getElementById('camBtn');
+            btn.className = isCamOff 
+                ? "w-12 h-12 rounded-xl bg-red-600 text-white flex items-center justify-center transition shadow-lg shadow-red-600/30"
+                : "w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition border border-gray-700";
+            btn.innerHTML = `<i class="fa-solid fa-video${isCamOff ? '-slash' : ''} text-sm"></i>`;
         }
 
-        function broadcastMediaState() {
-            if (dataConn && dataConn.open) {
-                dataConn.send({
-                    type: 'MEDIA_STATE',
-                    micEnabled: isMicEnabled,
-                    camEnabled: isCamEnabled || isScreenSharing
-                });
-            }
-        }
-
-        // ==================== KONTROL MEDIA DI DALAM RUANG RAPAT ====================
-        function toggleRoomMic() {
-            if (!localStream || localStream.getAudioTracks().length === 0) {
-                showToast('Mikrofon tidak tersedia.', 'warning');
-                return;
-            }
-            isMicEnabled = !isMicEnabled;
-            localStream.getAudioTracks().forEach(t => t.enabled = isMicEnabled);
-            updateRoomMediaButtons();
-            broadcastMediaState();
-        }
-
-        function toggleRoomCam() {
-            if (isScreenSharing) {
-                showToast('Hentikan berbagi layar terlebih dahulu untuk mengubah kamera.', 'info');
-                return;
-            }
-            if (!localStream || localStream.getVideoTracks().length === 0) {
-                showToast('Kamera tidak tersedia.', 'warning');
-                return;
-            }
-            isCamEnabled = !isCamEnabled;
-            localStream.getVideoTracks().forEach(t => t.enabled = isCamEnabled);
-            updateRoomMediaButtons();
-            broadcastMediaState();
-        }
-
-        function updateRoomMediaButtons() {
-            // Update tombol & ikon Mic
-            const btnMic = document.getElementById('btnRoomMic');
-            const iconMic = document.getElementById('iconRoomMic');
-            const pipMicIcon = document.getElementById('localRoomMicIcon');
-
-            if (isMicEnabled) {
-                btnMic.className = 'p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition';
-                iconMic.setAttribute('data-lucide', 'mic');
-                pipMicIcon.setAttribute('data-lucide', 'mic');
-                pipMicIcon.className = 'w-3 h-3 text-emerald-400 shrink-0';
-            } else {
-                btnMic.className = 'p-3.5 rounded-full bg-red-600 hover:bg-red-500 text-white border border-red-400/30 transition';
-                iconMic.setAttribute('data-lucide', 'mic-off');
-                pipMicIcon.setAttribute('data-lucide', 'mic-off');
-                pipMicIcon.className = 'w-3 h-3 text-red-400 shrink-0';
-            }
-
-            // Update tombol & ikon Kamera
-            const btnCam = document.getElementById('btnRoomCam');
-            const iconCam = document.getElementById('iconRoomCam');
-            const pipCamOff = document.getElementById('localRoomCamOff');
-
-            if (isCamEnabled || isScreenSharing) {
-                btnCam.className = 'p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition';
-                iconCam.setAttribute('data-lucide', 'video');
-                pipCamOff.classList.add('hidden');
-                pipCamOff.classList.remove('flex');
-            } else {
-                btnCam.className = 'p-3.5 rounded-full bg-red-600 hover:bg-red-500 text-white border border-red-400/30 transition';
-                iconCam.setAttribute('data-lucide', 'video-off');
-                pipCamOff.classList.remove('hidden');
-                pipCamOff.classList.add('flex');
-            }
-            lucide.createIcons();
-        }
-
-        // Ganti Kamera Depan/Belakang (Mobile)
-        async function switchRoomCamera() {
-            if (isScreenSharing) {
-                showToast('Tidak dapat memutar kamera saat sedang berbagi layar.', 'warning');
-                return;
-            }
+        async function switchCamera() {
             currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-            try {
-                const newStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: false
-                });
-                const newVideoTrack = newStream.getVideoTracks()[0];
-                newVideoTrack.enabled = isCamEnabled;
-
-                // Ganti track di localStream
-                const oldVideoTrack = localStream.getVideoTracks()[0];
-                if (oldVideoTrack) {
-                    localStream.removeTrack(oldVideoTrack);
-                    oldVideoTrack.stop();
-                }
-                localStream.addTrack(newVideoTrack);
-
-                // Hilangkan efek cermin jika menggunakan kamera belakang
-                const localVid = document.getElementById('localRoomVideo');
-                localVid.classList.toggle('mirror-video', currentFacingMode === 'user');
-                localVid.srcObject = localStream;
-
-                // Ganti track video yang dikirim ke lawan bicara secara real-time
-                replaceOutgoingVideoTrack(newVideoTrack);
-                showToast(`Beralih ke kamera ${currentFacingMode === 'user' ? 'Depan' : 'Belakang'}`, 'info');
-            } catch (err) {
-                showToast('Perangkat ini tidak mendukung pergantian kamera.', 'warning');
+            await initPreview();
+            if (activeCall && localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) sender.replaceTrack(videoTrack);
             }
         }
 
-        // ==================== BERBAGI LAYAR (SCREEN SHARING) ====================
-        async function toggleScreenShare() {
-            if (isScreenSharing) {
-                stopScreenShare();
-                return;
-            }
-
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                showToast('Browser di perangkat ini tidak mendukung fitur Berbagi Layar.', 'warning');
-                return;
-            }
-
-            try {
-                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-                const screenTrack = screenStream.getVideoTracks()[0];
-                isScreenSharing = true;
-
-                // Tampilkan layar yang dibagikan di PiP lokal (tanpa efek mirror)
-                const localVid = document.getElementById('localRoomVideo');
-                localVid.classList.remove('mirror-video');
-                localVid.srcObject = screenStream;
-
-                // Kirim track layar ke lawan bicara
-                replaceOutgoingVideoTrack(screenTrack);
-
-                // Deteksi jika pengguna menekan tombol "Stop Sharing" bawaan browser
-                screenTrack.onended = () => {
-                    stopScreenShare();
-                };
-
-                document.getElementById('btnScreenShare').className = 'p-3.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/40 transition';
-                updateRoomMediaButtons();
-                broadcastMediaState();
-                showToast('Anda sedang membagikan layar', 'success');
-            } catch (err) {
-                if (err.name !== 'NotAllowedError') {
-                    showToast('Gagal memulai berbagi layar.', 'error');
-                }
+        function toggleChat() {
+            const drawer = document.getElementById('chatDrawer');
+            drawer.classList.toggle('translate-x-full');
+            if (!drawer.classList.contains('translate-x-full')) {
+                document.getElementById('chatBadge').classList.add('hidden');
             }
         }
 
-        function stopScreenShare() {
-            if (!isScreenSharing) return;
-            isScreenSharing = false;
-
-            if (screenStream) {
-                screenStream.getTracks().forEach(t => t.stop());
-                screenStream = null;
-            }
-
-            // Kembalikan ke video kamera lokal
-            const localVid = document.getElementById('localRoomVideo');
-            localVid.classList.toggle('mirror-video', currentFacingMode === 'user');
-            localVid.srcObject = localStream;
-
-            const camTrack = localStream ? localStream.getVideoTracks()[0] : null;
-            if (camTrack) {
-                replaceOutgoingVideoTrack(camTrack);
-            }
-
-            document.getElementById('btnScreenShare').className = 'p-3.5 rounded-full bg-meet-card hover:bg-meet-hover text-white border border-zinc-700/60 transition';
-            updateRoomMediaButtons();
-            broadcastMediaState();
-            showToast('Berbagi layar dihentikan', 'info');
-        }
-
-        function replaceOutgoingVideoTrack(newTrack) {
-            if (mediaCall && mediaCall.peerConnection) {
-                const sender = mediaCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender) {
-                    sender.replaceTrack(newTrack);
-                }
-            }
-        }
-
-        // ==================== FITUR CHAT REAL-TIME ====================
-        function toggleChatPanel() {
-            const panel = document.getElementById('chatPanel');
-            isChatOpen = !isChatOpen;
-            panel.classList.toggle('hidden', !isChatOpen);
-            panel.classList.toggle('flex', isChatOpen);
-
-            if (isChatOpen) {
-                document.getElementById('chatUnreadBadge').classList.add('hidden');
-                document.getElementById('chatInput').focus();
-            }
-        }
-
-        function sendChatMessage(event) {
-            event.preventDefault();
+        function sendChatMessage() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
             if (!text) return;
+            const myName = document.getElementById('userNameInput').value.trim() || 'Anda';
+            appendChatMessage(myName, text, true);
 
-            const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            appendChatMessage(myDisplayName, text, timeStr, true);
-
-            if (dataConn && dataConn.open) {
-                dataConn.send({
-                    type: 'CHAT_MESSAGE',
-                    sender: myDisplayName,
-                    text: text,
-                    time: timeStr
-                });
-            } else {
-                showToast('Pesan hanya tampil lokal (belum ada peserta lain).', 'warning');
+            if (activeConnection && activeConnection.open) {
+                activeConnection.send({ type: 'chat', sender: myName, text: text });
             }
             input.value = '';
         }
 
-        function appendChatMessage(sender, text, time, isSelf) {
-            const container = document.getElementById('chatMessagesContainer');
-            const wrapper = document.createElement('div');
-            wrapper.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'}`;
+        function handleChatKeyPress(e) {
+            if (e.key === 'Enter') sendChatMessage();
+        }
 
-            const meta = document.createElement('div');
-            meta.className = 'text-[10px] text-zinc-400 mb-1 px-1';
-            meta.textContent = `${isSelf ? 'Anda' : sender} • ${time}`;
-
-            const bubble = document.createElement('div');
-            bubble.className = `px-3.5 py-2 rounded-2xl text-xs sm:text-sm max-w-[85%] break-words ${
-                isSelf 
-                    ? 'bg-blue-600 text-white rounded-br-sm' 
-                    : 'bg-meet-card text-zinc-100 border border-zinc-700/70 rounded-bl-sm'
-            }`;
-            bubble.textContent = text;
-
-            wrapper.appendChild(meta);
-            wrapper.appendChild(bubble);
-            container.appendChild(wrapper);
+        function appendChatMessage(sender, text, isMe = false) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`;
+            div.innerHTML = `
+                <span class="text-[10px] text-gray-400 px-1">${sender}</span>
+                <div class="bg-${isMe ? 'indigo-600' : 'gray-800'} text-white px-3 py-2 rounded-2xl max-w-[85%] break-words">
+                    ${text}
+                </div>
+            `;
+            container.appendChild(div);
             container.scrollTop = container.scrollHeight;
         }
 
-        // ==================== SALIN UNDANGAN & DRAG PiP ====================
-        function copyToClipboard(text, successMsg) {
-            const temp = document.createElement('input');
-            temp.value = text;
-            document.body.appendChild(temp);
-            temp.select();
-            document.execCommand('copy');
-            document.body.removeChild(temp);
-            showToast(successMsg, 'success');
-        }
-
         function copyInviteLink() {
-            const link = document.getElementById('modalInviteLinkInput').value;
-            copyToClipboard(link, 'Tautan undangan rapat berhasil disalin!');
-        }
-
-        function copyRoomCodeOnly() {
-            copyToClipboard(currentRoomId, 'Kode ruang berhasil disalin!');
-        }
-
-        function togglePipSize() {
-            const pip = document.getElementById('localPipContainer');
-            isPipExpanded = !isPipExpanded;
-            if (isPipExpanded) {
-                pip.classList.remove('w-32', 'sm:w-52', 'md:w-60');
-                pip.classList.add('w-48', 'sm:w-72', 'md:w-80');
-            } else {
-                pip.classList.remove('w-48', 'sm:w-72', 'md:w-80');
-                pip.classList.add('w-32', 'sm:w-52', 'md:w-60');
-            }
-        }
-
-        function setupDraggablePip() {
-            const pip = document.getElementById('localPipContainer');
-            let isDragging = false;
-            let startX, startY, initialLeft, initialTop;
-
-            const onStart = (clientX, clientY) => {
-                isDragging = true;
-                const rect = pip.getBoundingClientRect();
-                startX = clientX;
-                startY = clientY;
-                initialLeft = rect.left;
-                initialTop = rect.top;
-                pip.style.right = 'auto';
-                pip.style.bottom = 'auto';
-                pip.style.left = `${initialLeft}px`;
-                pip.style.top = `${initialTop}px`;
-            };
-
-            const onMove = (clientX, clientY) => {
-                if (!isDragging) return;
-                const dx = clientX - startX;
-                const dy = clientY - startY;
-                const maxX = window.innerWidth - pip.offsetWidth - 8;
-                const maxY = window.innerHeight - pip.offsetHeight - 88;
-                const nextX = Math.max(8, Math.min(maxX, initialLeft + dx));
-                const nextY = Math.max(64, Math.min(maxY, initialTop + dy));
-                pip.style.left = `${nextX}px`;
-                pip.style.top = `${nextY}px`;
-            };
-
-            const onEnd = () => { isDragging = false; };
-
-            pip.addEventListener('mousedown', (e) => onStart(e.clientX, e.clientY));
-            window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-            window.addEventListener('mouseup', onEnd);
-
-            pip.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) onStart(e.touches[0].clientX, e.touches[0].clientY);
-            }, { passive: true });
-            window.addEventListener('touchmove', (e) => {
-                if (isDragging && e.touches.length === 1) onMove(e.touches[0].clientX, e.touches[0].clientY);
-            }, { passive: true });
-            window.addEventListener('touchend', onEnd);
-        }
-
-        // ==================== TIMER & KELUAR RAPAT ====================
-        function startCallTimer() {
-            callSeconds = 0;
-            clearInterval(callTimerInterval);
-            callTimerInterval = setInterval(() => {
-                callSeconds++;
-                const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
-                const secs = String(callSeconds % 60).padStart(2, '0');
-                document.getElementById('roomDurationClock').textContent = `${mins}:${secs}`;
-            }, 1000);
+            const link = window.location.origin + window.location.pathname + '?room=' + currentRoomId;
+            navigator.clipboard.writeText(link).then(() => {
+                alert('Link rapat berhasil disalin!');
+            });
         }
 
         function leaveRoom() {
-            clearInterval(callTimerInterval);
-            if (isScreenSharing) stopScreenShare();
+            if (localStream) localStream.getTracks().forEach(track => track.stop());
+            if (peer) peer.destroy();
+            window.location.href = window.location.pathname;
+        }
 
-            if (dataConn) {
-                dataConn.close();
-                dataConn = null;
-            }
-            if (mediaCall) {
-                mediaCall.close();
-                mediaCall = null;
-            }
-            if (peer) {
-                peer.destroy();
-                peer = null;
-            }
-
-            // Bersihkan parameter URL
-            window.history.replaceState({}, '', window.location.pathname);
-
-            // Reset tampilan ke Lobby
-            document.getElementById('roomScreen').classList.add('hidden');
-            document.getElementById('roomScreen').classList.remove('flex');
-            document.getElementById('lobbyScreen').classList.remove('hidden');
-
-            document.getElementById('remoteVideo').srcObject = null;
-            document.getElementById('waitingPeerOverlay').classList.remove('hidden');
-            document.getElementById('remoteNameTag').classList.add('hidden');
-            document.getElementById('remoteCamOffOverlay').classList.add('hidden');
-            document.getElementById('chatMessagesContainer').innerHTML = `
-                <div class="p-3 rounded-xl bg-meet-bg/80 border border-zinc-800/80 text-[11px] text-zinc-400 text-center">
-                    Pesan dikirim langsung antar peserta (Peer-to-Peer) dan tidak disimpan di server mana pun.
-                </div>
-            `;
-            isChatOpen = false;
-            document.getElementById('chatPanel').classList.add('hidden');
-            document.getElementById('chatPanel').classList.remove('flex');
-
-            // Kembalikan preview video ke lobby
-            const lobbyVid = document.getElementById('lobbyPreviewVideo');
-            lobbyVid.srcObject = localStream;
-            updateLobbyMediaButtons();
-            showToast('Anda telah keluar dari ruang rapat.', 'info');
+        function toggleGuide() {
+            document.getElementById('guideModal').classList.toggle('hidden');
         }
     </script>
 </body>
